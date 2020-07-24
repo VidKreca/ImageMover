@@ -1,0 +1,12 @@
+__pycache__/
+build/
+dist/
+test/
+image_mover.spec
+
+*.jpg
+*.jpeg
+*.png
+*.cr2
+*.bmp
+*.gif
