@@ -8,11 +8,14 @@ from shutil import copyfile
 import subprocess
 from threading import Thread
 from datetime import datetime
+import hashlib
 
 
 """
 	NOTES:
 		- BIG PROBLEM: two images can have the same name
+			- differentiate by date
+
 """
 class ImageMover:
 	def __init__(self, master):
@@ -20,15 +23,23 @@ class ImageMover:
 		master.title("ImageMover")
 		master.minsize(200, 200)
 
+		# Program parameters
+		self.accepted_extensions = (".jpg", ".jpeg", ".png", ".raw", ".gif", ".bmp", ".cr2")
+
 		# GUI elements
-		self.file_btn = tk.Button(master, text="Select folders", command=self.select_folders)
+		self.file_btn = tk.Button(master, text="Select folders", command=self.start)
 		self.file_btn.grid(columnspan=2, rowspan=2,
 						   padx=15, pady=15,
 						   ipadx=5, ipady=5)
 
-		self.label = tk.Label(master, text="")
+		self.label = tk.Label(master, text="")	# Label that displays images to move
 		self.label.grid(columnspan=2, rowspan=3,
 						padx=5, pady=5)
+
+
+	def start(self):
+		self.select_folders()
+		self.generate_differences()
 
 
 	def select_folders(self):
@@ -36,18 +47,17 @@ class ImageMover:
 		self.origin = filedialog.askdirectory()
 		self.to = filedialog.askdirectory()
 
-		self.generate_differences()
-
 
 	def generate_differences(self):
 		origin = self.get_images(self.origin)
 		to 	   = self.get_images(self.to)
+		to_md5 = self.get_md5_list(to)
 
 		# Find images that are in 'origin' but aren't in 'to' folder
 		self.images_to_move = []
 		if len(origin) > 0:
 			for image in origin:
-				if image not in to:
+				if self.get_md5(image) not in to_md5:
 					self.images_to_move.append(image)
 
 		# Display all images that need to be moved in label
@@ -80,7 +90,7 @@ class ImageMover:
 		images = []
 		for current_path, subfolders, files in os.walk(path):
 			for file in files:
-				if file.lower().endswith((".jpg", ".jpeg", ".png", ".raw", ".gif", ".bmp", ".cr2")):
+				if file.lower().endswith(self.accepted_extensions):
 					images.append(os.path.join(current_path, file))
 
 			if recursive:
@@ -93,33 +103,65 @@ class ImageMover:
 		return [x.replace("\\", "/") for x in images if x is not None]
 
 
+	def get_date(self, path):
+		"""
+			Parameter:
+				path: type str, path to image file
+			Returns:
+				str:  date in "YYYY_MM_DD" format
+		"""
+		try:
+			# CR2 files do not have "date taken" EXIF data for some reason
+			if path.lower().endswith(".cr2"):	
+				date = datetime.fromtimestamp(os.path.getctime(path)).strftime("%Y_%m_%d")
+			else:
+				with Image.open(path) as opened:
+					date = opened.getexif().get(36867)
+				date = date[:date.find(" ")].replace(":", "_")
+		except:
+			date = None
+
+		return "None" if date == None else date
+
+
+	def get_md5_list(self, arr):
+		try:
+			return [self.get_md5(x) for x in arr]
+		except:
+			return []	
+
+
+	def get_md5(self, path):
+		"""
+			Parameter:
+				path: type str, path to file
+			Returns:
+				str:  MD5 checksum of the file
+		"""
+		try:
+			with open(path, "rb") as file:
+				data = file.read()
+				return hashlib.md5(data).hexdigest()
+		except:
+			return None
+
+
 	def move_images(self):
 		if self.images_to_move != None and len(self.images_to_move) > 0:
 			# Sort by dates
 			date_sorted = {}
 			for img in self.images_to_move:
-				if img.lower().endswith(".cr2"):
-					date = datetime.fromtimestamp(os.path.getctime(img)).strftime("%Y_%m_%d")
-				else:
-					with Image.open(img) as opened:
-						date = opened.getexif().get(36867)
-
-				if date != None:
-					date = date[:date.find(" ")].replace(":", "_")
-				else:
-					date = "No date"
+				date = self.get_date(img)
 				if date not in date_sorted:
 					date_sorted[date] = []
 				date_sorted[date].append(img)
 
-			# Create missing date folders
-			for date in date_sorted:
+			for date, images in date_sorted.items():
+				# Create missing date folder
 				path = os.path.join(self.to, date)
 				os.makedirs(path, exist_ok=True)
 
-			# Copy images
-			for date, images in date_sorted.items():
-				path = os.path.join(self.to, date)
+				# Copy images
 				for img in images:
 					dest = os.path.join(path, os.path.basename(img))
 					copyfile(img, dest)
