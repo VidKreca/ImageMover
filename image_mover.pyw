@@ -13,8 +13,16 @@ import hashlib
 
 """
 	NOTES:
-		- BIG PROBLEM: two images can have the same name
-			- differentiate by date
+		- Getting MD5's of all files is super slow
+			TODO:
+				- build a caching mechanism (external JSON: path: MD5)
+				- only check checksum against files in same date folder
+			DONE:
+				- generate checksum for only first 1MB
+					- improved speed: from 18s to 0.1s
+					- not as reliable (?)
+
+		- implement settings (save destination path)
 
 """
 class ImageMover:
@@ -39,19 +47,32 @@ class ImageMover:
 
 	def start(self):
 		self.select_folders()
+		self.init_cache()
 		self.generate_differences()
 
 
 	def select_folders(self):
-		# TODO - add better UI cues
 		self.origin = filedialog.askdirectory()
 		self.to = filedialog.askdirectory()
 
 
+	def init_cache(self):
+		# Create the JSON file if it doesn't exist
+		# TODO
+		pass
+
+
 	def generate_differences(self):
+		t = time.time()
+		print("start")
 		origin = self.get_images(self.origin)
 		to 	   = self.get_images(self.to)
+		print("end of get images  ", time.time()-t)
+		print("start of md5 list")
 		to_md5 = self.get_md5_list(to)
+
+		print("end of md5 list  ", time.time()-t)
+		print("start of md5 checking")
 
 		# Find images that are in 'origin' but aren't in 'to' folder
 		self.images_to_move = []
@@ -59,6 +80,8 @@ class ImageMover:
 			for image in origin:
 				if self.get_md5(image) not in to_md5:
 					self.images_to_move.append(image)
+
+		print("end of md5 checking  ", time.time()-t)
 
 		# Display all images that need to be moved in label
 		if len(self.images_to_move) > 0:
@@ -86,7 +109,7 @@ class ImageMover:
 			self.label["text"] = "No new images found"
 
 
-	def get_images(self, path, recursive=True):
+	def get_images(self, path:str, recursive=True) -> list:
 		images = []
 		for current_path, subfolders, files in os.walk(path):
 			for file in files:
@@ -103,7 +126,7 @@ class ImageMover:
 		return [x.replace("\\", "/") for x in images if x is not None]
 
 
-	def get_date(self, path):
+	def get_date(self, path:str) -> str:
 		"""
 			Parameter:
 				path: type str, path to image file
@@ -124,23 +147,26 @@ class ImageMover:
 		return "None" if date == None else date
 
 
-	def get_md5_list(self, arr):
+	def get_md5_list(self, arr:list) -> list:
 		try:
 			return [self.get_md5(x) for x in arr]
 		except:
 			return []	
 
 
-	def get_md5(self, path):
+	def get_md5(self, path:str) -> str:
 		"""
+			Description:
+				Generates a MD5 checksum for the first 1MB of the file
 			Parameter:
 				path: type str, path to file
 			Returns:
 				str:  MD5 checksum of the file
 		"""
+		chunk_size = 2**20	# 1MB
 		try:
 			with open(path, "rb") as file:
-				data = file.read()
+				data = file.read(chunk_size)
 				return hashlib.md5(data).hexdigest()
 		except:
 			return None
