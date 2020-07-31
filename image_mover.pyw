@@ -15,7 +15,7 @@ import hashlib
 	NOTES:
 		- Getting MD5's of all files is super slow
 			TODO:
-				- build a caching mechanism (external JSON: path: MD5)
+				- build a caching mechanism (external JSON -> path: MD5_checksum)
 				- only check checksum against files in same date folder
 			DONE:
 				- generate checksum for only first 1MB
@@ -23,6 +23,7 @@ import hashlib
 					- not as reliable (?)
 
 		- implement settings (save destination path)
+		- implement nicer GUI
 
 """
 class ImageMover:
